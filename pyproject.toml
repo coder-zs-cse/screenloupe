@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "screenloupe"
+version = "0.1.0"
+description = "Hold the middle mouse button to magnify the screen under your cursor, anywhere on Windows."
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+authors = [{ name = "You" }]
+keywords = ["magnifier", "zoom", "accessibility", "windows", "loupe"]
+classifiers = [
+    "Environment :: Win32 (MS Windows)",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Topic :: Adaptive Technologies",
+]
+# No third-party dependencies: everything is stdlib + ctypes against Win32.
+
+[project.gui-scripts]
+# gui-scripts build a *windowed* launcher .exe — no console window appears.
+screenloupe = "screenloupe.cli:main"
+
+[project.scripts]
+# A console variant for debugging (prints the banner, supports Ctrl+C).
+screenloupe-debug = "screenloupe.cli:main_console"
+
+[tool.setuptools]
+packages = ["screenloupe"]
