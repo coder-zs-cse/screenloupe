@@ -1,0 +1,103 @@
+# ScreenLoupe 🔍
+
+**A rectangular magnifying glass for your screen.** Select any region of your Windows desktop and ScreenLoupe projects a live, enlarged, semi-transparent copy of it across your screen — while you keep interacting with the *real* windows underneath. Built to relax your eyes when reading narrow AI chat panels (Cursor, VS Code Copilot, etc.), useful anywhere text is too small.
+
+This repository is a **design-first handover bundle**: every behavior, API, and tradeoff is specified in markdown before a line of code exists. An AI editor (Cursor / Claude Code) should be able to implement the entire project from these documents.
+
+---
+
+## What it does
+
+- **Region Magnifier (`Alt+M`)** — a Snipping-Tool-style selector appears; drag a rectangle; on release, a live magnified overlay of that region fills the maximum possible screen area. The overlay is click-through and semi-transparent: your cursor, your windows, and your interactions all stay on the *original* screen. Scroll the real chat panel → the magnified view updates live. Press `Esc` to dismiss.
+- **Cursor Lens (hold `Alt+N`)** — *deferred post-v0.1*; region magnifier ships first while hold-to-release hotkey reliability is fixed on Windows.
+- **System tray app** — runs in the background; tray menu for toggle/settings/quit.
+- **Settings window** — left tab rail, right content pane, Apply/Cancel. Configure hotkeys, zoom, opacity, lens parameters, run-on-startup.
+- **Installer** — a single `ScreenLoupe-Setup.exe` with a setup wizard: install location, Start Menu shortcut, run-on-startup (checked by default), launch on finish.
+
+## Tech stack
+
+| Layer | Choice | Version |
+|---|---|---|
+| Language | Python | 3.11+ |
+| GUI / overlays | PyQt6 | 6.6+ |
+| Screen capture | `mss` (GDI BitBlt) v1; `dxcam` (DXGI Desktop Duplication) as Phase-7 upgrade path | mss 9.x |
+| Win32 interop | `pywin32` + `ctypes` | pywin32 306+ |
+| Global hotkeys | `keyboard` library (low-level hooks; needed for hold/release detection) | 0.13+ |
+| Packaging | PyInstaller (`--onedir`) | 6.x |
+| Installer wizard | Inno Setup 6 | 6.2+ |
+
+**Why Python/PyQt6 and not C#/WPF?** See `ARCHITECTURE.md § Key Decisions`. Short version: fastest path to a working overlay pipeline, the developer's existing ScreenLoupe prototype validated the click-through overlay approach in PyQt6, and every hard problem here is a raw Win32 call that is equally accessible from ctypes. The decision is documented and reversible.
+
+## Reading order (for the implementing AI editor)
+
+1. `KARPATHY.md` — behavioral contract. Read before writing any code.
+2. `ARCHITECTURE.md` — system design, module map, state machine, key decisions.
+3. `docs/01-product-spec.md` — features and exact UX behavior.
+4. `docs/02-technical-design.md` — the Win32 details that make or break this app.
+5. `docs/03-ui-ux-design.md` — visual design for wizard, settings, selector, overlays.
+6. `docs/04-implementation-plan.md` — phased milestones, each with verify criteria.
+7. `CLAUDE.md` / `.cursorrules` — conventions while working in the codebase.
+
+## Project structure (target)
+
+```
+screenloupe/
+├── README.md / ARCHITECTURE.md / CLAUDE.md / KARPATHY.md / .cursorrules
+├── pyproject.toml              # deps, ruff config, entry point
+├── assets/                     # icon.ico, tray icons, wizard banner images
+├── installer/
+│   └── screenloupe.iss         # Inno Setup wizard script
+├── scripts/
+│   └── build.ps1               # PyInstaller build + Inno compile, one command
+├── src/screenloupe/
+│   ├── main.py                 # entry point: single-instance guard, tray bootstrap
+│   ├── app.py                  # controller: wires hotkeys ↔ state ↔ overlays
+│   ├── core/                   # config schema, persistence, app state machine
+│   ├── capture/                # screen capture engine + capture-exclusion helper
+│   ├── hotkeys/                # global hotkey manager (toggle + hold semantics)
+│   ├── overlay/                # selector, magnifier, lens + Win32 window helpers
+│   ├── ui/                     # tray icon, settings window (pages/, widgets/), theme
+│   └── platformwin/            # run-on-startup registry, DPI awareness
+└── tests/                      # mirrors src/ — pure-logic tests (geometry, config)
+```
+
+## Local dev setup
+
+```powershell
+git clone <repo> && cd screenloupe
+python -m venv .venv && .venv\Scripts\activate
+pip install -e ".[dev]"
+python -m screenloupe          # runs the tray app
+```
+
+Build the installer:
+
+```powershell
+.\scripts\build.ps1            # → dist/ScreenLoupe-Setup.exe
+```
+
+## v0.1 release scope
+
+Shipped in v0.1: **Alt+M region magnifier**, master toggle, Esc dismiss, config persistence, installer.
+
+Deferred to a fast-follow: **Alt+N cursor lens** (hook hold/release edge cases on Windows).
+
+Remaining implementation (see `docs/04-implementation-plan.md`):
+
+| Phase | Work | Status |
+|---|---|---|
+| 0–4 | Scaffold, spikes, capture, selector, magnifier | Done |
+| 5 | Cursor lens | Code present; hotkey disabled (`LENS_HOTKEY_ENABLED`) |
+| 6 | Tray + settings window | Done (lens page stored; hotkey disabled) |
+| 7 | PyInstaller + Inno installer | `.\scripts\build.ps1` → `dist\ScreenLoupe-Setup.exe` |
+| 8 | Hardening (display change, edge cases, FAQ) | Next |
+
+## Contributing
+
+- Branch naming: `feat/<area>-<short>`, `fix/<area>-<short>` (e.g., `feat/lens-refresh-rate`)
+- One concern per PR; every PR description states the verify step that proves it works
+- Read `KARPATHY.md` before contributing — human or AI
+
+## License
+
+MIT (proposed — confirm before publishing).

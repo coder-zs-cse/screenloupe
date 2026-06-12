@@ -1,0 +1,9 @@
+PyQt6>=6.6
+mss>=9.0
+keyboard>=0.13.5
+pywin32>=306
+
+[dev]
+pytest>=8.0
+ruff>=0.4
+pyinstaller>=6.0

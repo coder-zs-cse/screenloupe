@@ -1,0 +1,51 @@
+# ScreenLoupe — Cursor Rules
+
+You are implementing ScreenLoupe: a Windows tray app that magnifies screen regions into live,
+click-through, semi-transparent overlays. Python 3.11 + PyQt6 + mss + keyboard + pywin32.
+Design docs are the source of truth: ARCHITECTURE.md, then docs/01..04. If a request conflicts
+with them, say so before coding.
+
+## Karpathy discipline (full text in KARPATHY.md — binding)
+1. THINK BEFORE CODING — state assumptions; if multiple interpretations exist, name them and ask;
+   one clarifying question beats 200 wrong lines.
+2. SIMPLICITY FIRST — minimum code that solves the problem; no speculative abstractions,
+   no unrequested configurability; if 200 lines could be 50, rewrite before showing.
+3. SURGICAL CHANGES — touch only what the request requires; don't improve adjacent code;
+   mention unrelated bugs, never silently fix them; remove only orphans YOUR change created.
+4. GOAL-DRIVEN — define a verifiable done-criterion before starting; for multi-step work,
+   state a short plan with a verify step per step. Phase verify-steps live in docs/04.
+
+## Hard architectural rules
+- Only `app.py` (AppController) creates/destroys overlays or changes AppState. Overlays emit
+  signals; they never self-manage lifecycle or register hotkeys.
+- ALL geometry in capture/, overlay math, and config is PHYSICAL pixels. Convert logical↔physical
+  ONLY in src/screenloupe/platformwin/dpi.py, at the Qt boundary.
+- DPI awareness (`SetProcessDpiAwarenessContext(-4)`) is the FIRST statement in main(), before
+  QApplication exists. Never call it later.
+- Every magnifier/lens overlay window gets BOTH treatments after show():
+  overlay/win32_window.make_overlay() (click-through, no-activate, topmost, toolwindow) AND
+  capture/exclusion.set_capture_excluded() (WDA_EXCLUDEFROMCAPTURE = 0x11). Skipping exclusion
+  produces an infinite mirror, not an error.
+- The selector overlay is the ONLY overlay that may receive mouse/keyboard input.
+- `keyboard` lib callbacks run on a hook thread: never touch Qt objects there; emit queued signals.
+- Esc is hooked/suppressed ONLY while state is SELECTING or MAGNIFYING.
+- Settings IO goes through core/config.py (ConfigStore) only; UI pages never touch the JSON file.
+  Run-at-startup truth lives in the HKCU Run registry key, not the JSON.
+- Win32 constants live in core/constants.py; no magic numbers at call sites.
+- Set ALL Qt window flags before show(); changing flags after show() recreates the native window
+  and drops the Win32 ex-styles and display affinity.
+
+## File patterns
+- src/screenloupe/overlay/*    → overlay windows + pure geometry (fit_geometry is unit-tested)
+- src/screenloupe/capture/*    → mss engine + exclusion helper; no window management here
+- src/screenloupe/hotkeys/*    → hooks → Qt signals; no knowledge of what signals mean
+- src/screenloupe/ui/settings/pages/* → one page per tab; widgets/ for reusable controls
+- src/screenloupe/platformwin/ → registry startup, DPI (dir is platformwin, NOT platform —
+  stdlib shadowing breaks PyInstaller)
+- tests/ mirrors src/ — pure logic only (geometry, config clamping, state-transition table);
+  don't mock Win32 into meaningless tests
+
+## Style
+- Full type hints; ruff, line length 100; Qt signals named as facts (region_selected, frame_ready).
+- Never crash the tray app: catch at controller boundaries, log to %APPDATA%/ScreenLoupe, fall to IDLE.
+- No per-frame allocations in the 30–60 Hz capture/repaint path; skip frames on overrun, never queue.
