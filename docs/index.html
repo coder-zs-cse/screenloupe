@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScreenLoupe — Magnify Anything on Windows</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ── variables ─────────────────────────────────────────────────────────── */
+  :root {
+    --bg:        #080808;
+    --surface:   #111111;
+    --border:    #222222;
+    --text:      #eeede8;
+    --muted:     #666;
+    --accent:    #c8f135;   /* electric lime — lens / optic */
+    --accent2:   #f1c435;   /* warm amber */
+    --code-bg:   #161616;
+    --r:         12px;
+  }
+
+  /* ── reset & base ───────────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Outfit', sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+    overflow-x: hidden;
+  }
+  a { color: inherit; text-decoration: none; }
+
+  /* ── noise grain overlay ────────────────────────────────────────────────── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    pointer-events: none; z-index: 999;
+    opacity: .03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* ── nav ─────────────────────────────────────────────────────────────────── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1.1rem 2.5rem;
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(16px);
+    background: rgba(8,8,8,.85);
+  }
+  .nav-logo {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.4rem; font-weight: 700;
+    letter-spacing: .04em;
+    display: flex; align-items: center; gap: .5rem;
+  }
+  .nav-logo .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent);
+  }
+  .nav-links {
+    display: flex; align-items: center; gap: 2rem;
+    font-size: .85rem; font-weight: 500; color: var(--muted);
+    letter-spacing: .06em; text-transform: uppercase;
+  }
+  .nav-links a:hover { color: var(--text); }
+  .nav-gh {
+    display: flex; align-items: center; gap: .45rem;
+    padding: .45rem 1rem;
+    border: 1px solid var(--border); border-radius: 6px;
+    font-size: .82rem; font-weight: 500;
+    color: var(--text) !important;
+    transition: border-color .2s, background .2s;
+  }
+  .nav-gh:hover { border-color: var(--accent); background: rgba(200,241,53,.04); }
+
+  /* ── hero ────────────────────────────────────────────────────────────────── */
+  .hero {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    gap: 4rem;
+    padding: 8rem 6rem 5rem;
+    position: relative;
+  }
+
+  /* subtle radial glow behind loupe */
+  .hero::after {
+    content: '';
+    position: absolute;
+    right: 10%; top: 50%;
+    transform: translateY(-50%);
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(200,241,53,.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero-copy { animation: fadeUp .8s ease both; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: .5rem;
+    padding: .3rem .85rem;
+    border: 1px solid rgba(200,241,53,.35);
+    border-radius: 99px;
+    background: rgba(200,241,53,.06);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .72rem; color: var(--accent);
+    letter-spacing: .08em;
+    margin-bottom: 1.6rem;
+  }
+
+  h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(3rem, 5vw, 5rem);
+    font-weight: 700; line-height: 1.08;
+    letter-spacing: -.01em;
+    margin-bottom: 1.2rem;
+  }
+  h1 em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .hero-sub {
+    font-size: 1.1rem; color: var(--muted);
+    max-width: 460px; margin-bottom: 2.5rem;
+    font-weight: 300;
+  }
+
+  .hero-actions {
+    display: flex; flex-wrap: wrap; gap: 1rem; align-items: center;
+  }
+
+  .btn-primary {
+    display: inline-flex; align-items: center; gap: .6rem;
+    padding: .85rem 2rem;
+    background: var(--accent); color: #080808;
+    font-weight: 600; font-size: .95rem;
+    border-radius: var(--r);
+    transition: transform .15s, box-shadow .15s;
+    white-space: nowrap;
+  }
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(200,241,53,.25);
+  }
+  .btn-primary svg { width:18px; height:18px; }
+
+  .btn-ghost {
+    display: inline-flex; align-items: center; gap: .5rem;
+    padding: .85rem 1.6rem;
+    border: 1px solid var(--border); border-radius: var(--r);
+    font-size: .9rem; font-weight: 500; color: var(--muted);
+    transition: border-color .2s, color .2s;
+  }
+  .btn-ghost:hover { border-color: #444; color: var(--text); }
+
+  /* ── loupe illustration ───────────────────────────────────────────────────── */
+  .hero-visual {
+    display: flex; justify-content: center; align-items: center;
+    animation: fadeUp .8s .2s ease both;
+    position: relative; z-index: 1;
+  }
+
+  .loupe-wrap {
+    position: relative; width: 340px; height: 340px;
+  }
+
+  /* outer ring — slow spin */
+  .loupe-ring {
+    position: absolute; inset: 0; border-radius: 50%;
+    border: 1.5px solid rgba(200,241,53,.25);
+    animation: spin 18s linear infinite;
+  }
+  .loupe-ring::before {
+    content: '';
+    position: absolute;
+    top: -3px; left: 50%; transform: translateX(-50%);
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent);
+  }
+
+  /* glass circle */
+  .loupe-glass {
+    position: absolute;
+    inset: 16px; border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,.08);
+    background: rgba(255,255,255,.02);
+    backdrop-filter: blur(2px);
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(200,241,53,.1),
+      inset 0 1px 0 rgba(255,255,255,.06),
+      0 40px 80px rgba(0,0,0,.6);
+  }
+
+  /* zoomed content illusion inside the glass */
+  .loupe-content {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .loupe-grid {
+    width: 200%; height: 200%;
+    background-image:
+      linear-gradient(rgba(200,241,53,.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(200,241,53,.04) 1px, transparent 1px);
+    background-size: 24px 24px;
+    transform: translate(-25%,-25%);
+  }
+  .loupe-text {
+    position: absolute;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.6rem; font-weight: 500;
+    letter-spacing: -.02em; color: var(--text);
+    text-shadow: 0 0 20px rgba(200,241,53,.3);
+    animation: float 4s ease-in-out infinite;
+  }
+
+  /* handle */
+  .loupe-handle {
+    position: absolute;
+    bottom: -54px; right: 30px;
+    width: 4px; height: 70px;
+    background: linear-gradient(to bottom, rgba(200,241,53,.6), rgba(200,241,53,.1));
+    border-radius: 2px;
+    transform: rotate(35deg);
+    transform-origin: top center;
+  }
+
+  /* cursor dot */
+  .cursor-dot {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 14px var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  /* ── features ─────────────────────────────────────────────────────────────── */
+  .features {
+    padding: 6rem 6rem;
+    border-top: 1px solid var(--border);
+  }
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .72rem; color: var(--accent);
+    letter-spacing: .14em; text-transform: uppercase;
+    margin-bottom: 1rem;
+  }
+  .section-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(2rem, 3.5vw, 3rem);
+    font-weight: 600; margin-bottom: 3.5rem;
+    max-width: 480px;
+  }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--r);
+    overflow: hidden;
+  }
+
+  .feature {
+    padding: 2rem 1.8rem;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    transition: background .2s;
+  }
+  .feature:nth-child(3n) { border-right: none; }
+  .feature:nth-last-child(-n+3) { border-bottom: none; }
+  .feature:hover { background: #161616; }
+
+  .feature-icon {
+    width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(200,241,53,.08);
+    border: 1px solid rgba(200,241,53,.2);
+    border-radius: 8px; margin-bottom: 1.2rem;
+    color: var(--accent);
+  }
+  .feature h3 {
+    font-size: 1rem; font-weight: 600;
+    margin-bottom: .45rem; letter-spacing: -.01em;
+  }
+  .feature p { font-size: .88rem; color: var(--muted); line-height: 1.6; }
+
+  /* ── install ──────────────────────────────────────────────────────────────── */
+  .install {
+    padding: 6rem;
+    border-top: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5rem; align-items: start;
+  }
+
+  .install h2 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(2rem, 3vw, 2.8rem);
+    font-weight: 600; margin-bottom: .8rem;
+  }
+  .install-sub { color: var(--muted); margin-bottom: 2rem; max-width: 380px; }
+
+  .install-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r); overflow: hidden;
+    margin-bottom: 1.2rem;
+  }
+  .install-card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: .7rem 1.2rem;
+    border-bottom: 1px solid var(--border);
+    font-size: .78rem; font-weight: 600;
+    letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+  }
+  .install-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .65rem; padding: .2rem .5rem;
+    border-radius: 4px; border: 1px solid var(--border);
+    color: var(--accent);
+  }
+  .install-code {
+    padding: 1rem 1.2rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .88rem; color: #b0b0b0;
+    user-select: all; cursor: text;
+    line-height: 1.7;
+  }
+  .install-code .cmd { color: var(--text); }
+  .install-code .flag { color: var(--accent); }
+  .install-code .comment { color: #444; }
+
+  .download-btn {
+    display: flex; align-items: center; gap: .75rem;
+    width: 100%;
+    padding: 1.1rem 1.5rem;
+    background: var(--accent); color: #080808;
+    font-weight: 700; font-size: 1rem;
+    border-radius: var(--r);
+    border: none; cursor: pointer;
+    transition: transform .15s, box-shadow .15s;
+    margin-bottom: 1rem;
+  }
+  .download-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 36px rgba(200,241,53,.3);
+  }
+  .download-meta {
+    font-size: .78rem; color: var(--muted); text-align: center;
+  }
+  .download-meta a { color: var(--accent); }
+  .download-meta a:hover { text-decoration: underline; }
+
+  /* requirements callout */
+  .req-box {
+    margin-top: 1.8rem;
+    padding: 1rem 1.2rem;
+    background: rgba(241,196,53,.04);
+    border: 1px solid rgba(241,196,53,.18);
+    border-radius: 8px;
+    font-size: .83rem; color: #999;
+    line-height: 1.6;
+  }
+  .req-box strong { color: var(--accent2); }
+
+  /* ── footer ───────────────────────────────────────────────────────────────── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 2.2rem 6rem;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: .82rem; color: var(--muted);
+  }
+  footer a { color: var(--muted); }
+  footer a:hover { color: var(--text); }
+  .footer-links { display: flex; gap: 2rem; }
+
+  /* ── animations ───────────────────────────────────────────────────────────── */
+  @keyframes fadeUp {
+    from { opacity:0; transform:translateY(24px); }
+    to   { opacity:1; transform:translateY(0);    }
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes float {
+    0%,100% { transform: translateY(0); }
+    50%      { transform: translateY(-8px); }
+  }
+  @keyframes pulse {
+    0%,100% { transform: translate(-50%,-50%) scale(1); opacity:1; }
+    50%      { transform: translate(-50%,-50%) scale(1.6); opacity:.6; }
+  }
+
+  /* scroll-reveal */
+  .reveal {
+    opacity:0; transform:translateY(20px);
+    transition: opacity .6s ease, transform .6s ease;
+  }
+  .reveal.visible { opacity:1; transform:translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- ── NAV ──────────────────────────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-logo">
+    <div class="dot"></div>
+    ScreenLoupe
+  </div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#install">Install</a>
+      <a href="https://github.com/coder-zs-cse/screenloupe" class="nav-gh" target="_blank">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+      </svg>
+      GitHub
+    </a>
+  </div>
+</nav>
+
+<!-- ── HERO ─────────────────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-copy">
+    <div class="badge">v0.1.0 · Windows · MIT License</div>
+    <h1>Magnify <em>anything,</em><br>anywhere.</h1>
+    <p class="hero-sub">
+      Hold a button and a magnifying circle follows your cursor — in your code editor,
+      in Settings, in games, everywhere. No screen resolution changes. No fuss.
+    </p>
+    <div class="hero-actions">
+      <a href="https://github.com/coder-zs-cse/screenloupe/releases/download/v1.0.0/ScreenLoupe.exe"
+         class="btn-primary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Download for Windows
+      </a>
+      <a href="#install" class="btn-ghost">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+        </svg>
+        Install via CLI
+      </a>
+    </div>
+  </div>
+
+  <div class="hero-visual">
+    <div class="loupe-wrap">
+      <div class="loupe-ring"></div>
+      <div class="loupe-glass">
+        <div class="loupe-content">
+          <div class="loupe-grid"></div>
+          <div class="loupe-text">Aa 12px</div>
+        </div>
+        <div class="cursor-dot"></div>
+      </div>
+      <div class="loupe-handle"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FEATURES ─────────────────────────────────────────────────────────────── -->
+<section class="features" id="features">
+  <div class="section-label reveal">What it does</div>
+  <h2 class="section-title reveal">Built for people who pay attention to detail.</h2>
+
+  <div class="features-grid reveal">
+
+    <div class="feature">
+      <div class="feature-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <rect x="2" y="3" width="20" height="14" rx="2"/>
+          <line x1="8" y1="21" x2="16" y2="21"/>
+          <line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+      </div>
+      <h3>System-wide</h3>
+      <p>Works in VS Code, Terminal, Settings, File Explorer, games — anything on your screen, not just the browser.</p>
+    </div>
+
+    <div class="feature">
+      <div class="feature-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+        </svg>
+      </div>
+      <h3>Configurable trigger</h3>
+      <p>Middle-click (smart tap-through), side mouse buttons, Right Ctrl, Right Shift — pick whichever fits your workflow.</p>
+    </div>
+
+    <div class="feature">
+      <div class="feature-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="M11 8v3l2 2M21 21l-4.35-4.35"/>
+        </svg>
+      </div>
+      <h3>Circle or strip</h3>
+      <p>A round loupe for precision or a full-width rectangular strip — great for reading code across the whole screen.</p>
+    </div>
+
+    <div class="feature">
+      <div class="feature-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+        </svg>
+      </div>
+      <h3>Native GPU acceleration</h3>
+      <p>Powered by the Windows Magnification API — the same engine as the OS Magnifier. No screenshot hacks, no lag.</p>
+    </div>
+
+    <div class="feature">
+      <div class="feature-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/>
+          <circle cx="12" cy="12" r="1"/>
+        </svg>
+      </div>
+      <h3>No Python required</h3>
+      <p>The installer bundles everything. One <code style="font-family:var(--mono);color:var(--accent)">.exe</code>, double-click, done. No dependencies to wrangle.</p>
+    </div>
+
+    <div class="feature">
+      <div class="feature-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      <h3>Open source</h3>
+      <p>MIT licensed. The whole thing is a few hundred lines of Python. Read it, fork it, improve it.</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── INSTALL ───────────────────────────────────────────────────────────────── -->
+<section class="install" id="install">
+  <div>
+    <div class="section-label reveal">Install</div>
+    <h2 class="reveal">Two ways in.</h2>
+    <p class="install-sub reveal">
+      The installer is for everyone. The CLI is for people who already have Python and just want it running.
+    </p>
+
+    <!-- download -->
+    <a href="https://github.com/coder-zs-cse/screenloupe/releases/download/v1.0.0/ScreenLoupe.exe"
+       class="download-btn reveal">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      ScreenLoupe.exe
+      <span style="margin-left:auto;font-size:.8rem;opacity:.6;font-weight:400">v1.0.0 ↗</span>
+    </a>
+    <p class="download-meta reveal">
+      Windows 10/11 · ~12 MB · No Python needed ·
+      <a href="https://github.com/coder-zs-cse/screenloupe/releases/tag/v1.0.0" target="_blank">Release v1.0.0</a>
+    </p>
+
+    <div class="req-box reveal">
+      <strong>What happens on install:</strong> copies the exe to Program Files,
+      adds a Start Menu entry, and optionally sets it to run silently at login
+      (checkbox is checked by default). You can change all settings later by
+      searching "ScreenLoupe" in the Start menu.
+    </div>
+  </div>
+
+  <!-- cli options -->
+  <div>
+    <div class="section-label reveal" style="margin-top:.2rem">With Python (pipx)</div>
+
+    <div class="install-card reveal">
+      <div class="install-card-header">
+        Install
+        <span class="install-tag">pipx recommended</span>
+      </div>
+      <div class="install-code">
+        <span class="comment"># one-time: install pipx if you don't have it</span><br>
+        <span class="cmd">pip install pipx</span><br><br>
+        <span class="comment"># install ScreenLoupe from GitHub</span><br>
+        <span class="cmd">pipx install</span> <span class="flag">git+https://github.com/coder-zs-cse/screenloupe</span>
+      </div>
+    </div>
+
+    <div class="install-card reveal">
+      <div class="install-card-header">Launch</div>
+      <div class="install-code">
+        <span class="comment"># open the settings window</span><br>
+        <span class="cmd">screenloupe</span><br><br>
+        <span class="comment"># run silently in background</span><br>
+        <span class="cmd">screenloupe</span> <span class="flag">--background</span>
+      </div>
+    </div>
+
+    <div class="install-card reveal">
+      <div class="install-card-header">Configure</div>
+      <div class="install-code">
+        <span class="cmd">screenloupe-debug config set zoom</span> <span class="flag">4</span><br>
+        <span class="cmd">screenloupe-debug config set trigger</span> <span class="flag">rctrl</span><br>
+        <span class="cmd">screenloupe-debug config set shape</span> <span class="flag">rect</span>
+      </div>
+    </div>
+
+    <p class="reveal" style="font-size:.8rem;color:var(--muted);margin-top:1rem">
+      <strong style="color:#666">Coming soon:</strong>
+      <code style="font-family:'JetBrains Mono',monospace;font-size:.78rem">winget install ScreenLoupe</code>
+      once the package is submitted to the winget community repo.
+    </p>
+  </div>
+</section>
+
+<!-- ── FOOTER ───────────────────────────────────────────────────────────────── -->
+<footer>
+  <span>ScreenLoupe &copy; 2025 · MIT License</span>
+  <div class="footer-links">
+    <a href="https://github.com/coder-zs-cse/screenloupe" target="_blank">GitHub</a>
+    <a href="https://github.com/coder-zs-cse/screenloupe/releases/tag/v1.0.0" target="_blank">Release v1.0.0</a>
+    <a href="https://github.com/coder-zs-cse/screenloupe/issues" target="_blank">Report a bug</a>
+  </div>
+</footer>
+
+<script>
+  // scroll-reveal
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+</script>
+
+  <script>
+    window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+  </script>
+
+  <script defer src="/_vercel/insights/script.js"></script>
+</body>
+</html>
